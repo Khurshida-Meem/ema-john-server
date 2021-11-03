@@ -63,7 +63,7 @@ async function run() {
 
         });
 
-        app.post('/order', async (req, res) => {
+        app.post('/orders', async (req, res) => {
             const order = req.body;
             order.createdAt = new Date();
             const result = await orderCollection.insertOne(order);
