@@ -2,9 +2,19 @@ const express = require('express');
 const { MongoClient } = require('mongodb');
 const cors = require('cors');
 require('dotenv').config();
+var admin = require("firebase-admin");
 
 const app = express();
 const port = process.env.PORT || 5000;
+
+
+// firebase admin initialization
+var serviceAccount = require('./ema-john-lite-firebase-adminsdk-wpzku-38864a3e90.json');
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+});
+
 
 // middle ware
 app.use(cors());
@@ -14,10 +24,25 @@ app.use(express.json());
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.0yaa9.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
 
+async function veryfiedToken(req, res, next) {
+    if (req.headers.authorization?.startsWith('Bearer')) {
+        const idToken = req.headers.authorization.split('Bearer')[1];
+        try {
+            const decodeUser = await admin.auth().verifyIdToken(idToken);
+            req.decodeUserEmail = decodeUser.email;
+        }
+        catch {
+
+        }
+
+    }
+    next();
+}
+
 async function run() {
     try {
         await client.connect();
-        const database = client.db('online_shop')
+        const database = client.db('online_shop');
         const productsCollection = database.collection('products');
         const orderCollection = database.collection('orders');
 
@@ -54,15 +79,22 @@ async function run() {
             res.send(products);
         });
 
-
         // Add Orders API
-        app.get('orders', async (req, res) => {
-            const cursor = orderCollection.find({});
-            const orders = await cursor.toArray();
-            res.json(orders);
+        app.get('/orders', veryfiedToken, async (req, res) => {
+            const email = req.query.email;
+            if (req.decodeUserEmail === email) {
+                query = { email: email };
+                const cursor = orderCollection.find(query);
+                const orders = await cursor.toArray();
+                res.json(orders);
+            }
+            else {
+                res.status(401).json({ message: 'User not authorized' })
+            }
+
+
 
         });
-
         app.post('/orders', async (req, res) => {
             const order = req.body;
             order.createdAt = new Date();
